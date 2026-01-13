@@ -1,0 +1,30 @@
+[project]
+name = "latentmetrics"
+version = "0.1.0"
+description = "Minimalistic latent correlation estimators for discretized data."
+authors = [{name = "Pavel Novikov", email = "pavnoval@gmail.com"}]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.25.2",
+    "scipy>=1.16.3",
+]
+
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0", 
+]
+dev = [
+    "black",           
+    "flake8",          
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
