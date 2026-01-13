@@ -1,12 +1,6 @@
 """
 Latent correlation estimation using rank-based statistics under
 Gaussian copula models.
-
-The methods are based on:
-
-Dey, D., & Zipunnikov, V. (2022).
-"Semiparametric Gaussian Copula Regression Modeling for Mixed Data Types (SGCRM)."
-arXiv preprint arXiv:2205.06868.
 """
 
 from typing import Optional
@@ -94,9 +88,9 @@ def latent_rank_co(
 
     Reference
     ----------
-    Dey, D., & Zipunnikov, V. (2022).
-    *Semiparametric Gaussian Copula Regression Modeling for Mixed Data Types (SGCRM)*.
-    arXiv preprint arXiv:2205.06868.
+    Quan, X., Booth, J. G., & Wells, M. T. (2018).
+    Rank-based approach for estimating correlations in mixed ordinal data.
+    arXiv preprint arXiv:1809.06255.
     """
 
     x = np.asarray(continuous_x)
@@ -238,13 +232,6 @@ def latent_rank_oo(
         """
         Compute the expected Kendall's tau as a function of the
         latent correlation rho.
-
-        The computation proceeds by:
-        1. Evaluating the bivariate Gaussian CDF at all interior
-           combinations of adjacent cut-points.
-        2. Aggregating contributions corresponding to concordant
-           and discordant category pairs.
-        3. Subtracting marginal correction terms.
         """
 
         mean = np.zeros(2)
