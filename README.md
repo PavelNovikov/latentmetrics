@@ -20,7 +20,13 @@ These estimators assume a **bivariate normal underlying distribution** and estim
 - Suitable for **binary, ordinal, and mixed data**, and also supports **continuous data** through **Greiner's formula**
 - Based on the assumption that data arises from an **arbitrary monotonic transformation** of underlying bivariate Gaussian variables (Gaussian copula model)
 - The correlation parameter (`rho`) is estimated by **matching the observed Kendall's tau** (rank correlation, invariant to monotonic transformations) to its expected value as a function of `rho`
-- Can also handle continuous data (via **Greiner's formula**)
+
+
+## Installation
+
+```bash
+pip install latentmetrics
+```
 
 ## Usage
 
@@ -58,12 +64,14 @@ print("Estimated correlation:", result.estimate)
 ### Copula Background
 - Hofert, M., Kojadinovic, I., Mächler, M., & Yan, J. (2018). *Elements of copula modeling with R*. Springer.
 
-## Available Packages
+## Related Packages for Latent Correlations
+
+If you are looking for alternative implementations or specialized features, you may find these packages useful:
 
 ### R Packages
-- [polycor](https://cran.r-project.org/web/packages/polycor/index.html) – Polychoric and Polyserial correlations  
-- [latentcor](https://cran.r-project.org/web/packages/latentcor/vignettes/latentcor.html) – Efficient implementations of rank-based correlations
+- [polycor](https://cran.r-project.org/web/packages/polycor/index.html) – The established standard for Polychoric and Polyserial correlations in R. 
+- [latentcor](https://cran.r-project.org/web/packages/latentcor/vignettes/latentcor.html) – Efficient implementations of rank-based correlations.
 
 ### Python Packages
-- [latentcor](https://pypi.org/project/latentcor/) – Efficient rank-based correlations from the authors of the R package  
-- [semopy](https://pypi.org/project/semopy/) – Structural Equation Modeling (SEM) package; includes polychoric and polyserial correlations
+- [latentcor](https://pypi.org/project/latentcor/) – High-performance Python implementation of rank-based correlation by the authors of the R package with the same name.
+- [semopy](https://pypi.org/project/semopy/) – Structural Equation Modeling (SEM) package; includes polychoric and polyserial correlations.
