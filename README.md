@@ -1,3 +1,5 @@
+[![Tests](https://github.com/PavelNovikov/latentmetrics/actions/workflows/tests.yml/badge.svg)](https://github.com/PavelNovikov/latentmetrics/actions/workflows/tests.yml)
+
 # Latent Correlation Estimation Package
 
 This package provides **minimalistic implementations of latent correlation estimators** between pairs of continuous variables when one or both variables are **discretized**. 
