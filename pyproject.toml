@@ -11,6 +11,8 @@ dependencies = [
     "scipy>=1.16.3",
 ]
 
+[project.urls]
+"Homepage" = "https://github.com/PavelNovikov/latentmetrics"
 
 [project.optional-dependencies]
 test = [
@@ -20,6 +22,12 @@ test = [
 dev = [
     "black",           
     "flake8",          
+]
+diagnostics = [
+    "matplotlib>=3.5.0",
+]
+all = [
+    "latentmetrics[diagnostics]",
 ]
 
 [build-system]
