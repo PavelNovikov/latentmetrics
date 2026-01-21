@@ -127,4 +127,4 @@ def plot_latent_density(
         ax.set_ylabel(r"Latent $Z_y$")
         ax.set_xlim(-4.5, 4.5)
         ax.set_ylim(-4.5, 4.5)
-        ax.grid(True, alpha=0.2)
+        ax.grid(False)
