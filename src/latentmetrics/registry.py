@@ -1,17 +1,7 @@
 from .types import VariableType, EstimateMethod
 from .engines import rank_based as rb
 from .engines import value_based as vb
-import functools
-
-
-def swap_args(func):
-    """Returns a new function that swaps the first two arguments."""
-
-    @functools.wraps(func)
-    def wrapper(a, b, *args, **kwargs):
-        return func(b, a, *args, **kwargs)
-
-    return wrapper
+from latentmetrics._utils import swap_args
 
 
 CORR_REGISTRY = {
