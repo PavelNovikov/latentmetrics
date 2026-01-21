@@ -40,13 +40,13 @@ def get_latent_edges(data: ArrayLike, bins_cont: int = 40) -> np.ndarray:
 
 
 def plot_latent_density(
-    x: ArrayLike, 
-    y: ArrayLike, 
-    title: str, 
+    x: ArrayLike,
+    y: ArrayLike,
+    title: str,
     rho: Optional[float] = None,
     decimal_points: int = 2,
     ax_empirical: Optional[plt.Axes] = None,
-    ax_theoretical: Optional[plt.Axes] = None
+    ax_theoretical: Optional[plt.Axes] = None,
 ) -> None:
     """
     Plot the empirical latent density by mapping observations to Z-space.
@@ -58,7 +58,7 @@ def plot_latent_density(
             raise ValueError(
                 "Providing 'ax_theoretical' requires both 'rho' and 'ax_empirical' to be provided."
             )
-    
+
     if rho is not None and ax_empirical is not None and ax_theoretical is None:
         raise ValueError(
             "When 'rho' and 'ax_empirical' are both provided, 'ax_theoretical' must also be provided."
@@ -78,19 +78,25 @@ def plot_latent_density(
     y_edges = get_latent_edges(y)
 
     # 4. Compute Empirical 2D Histogram
-    hist_empirical, _, _ = np.histogram2d(z_x, z_y, bins=[x_edges, y_edges], density=True)
+    hist_empirical, _, _ = np.histogram2d(
+        z_x, z_y, bins=[x_edges, y_edges], density=True
+    )
     X, Y = np.meshgrid(x_edges, y_edges)
 
     # 5. Internal Figure Setup
     if ax_empirical is None:
         num_plots = 2 if rho is not None else 1
-        fig, axes = plt.subplots(1, num_plots, figsize=(7 * num_plots, 5), squeeze=False)
+        fig, axes = plt.subplots(
+            1, num_plots, figsize=(7 * num_plots, 5), squeeze=False
+        )
         ax_empirical = axes[0, 0]
         if rho is not None:
             ax_theoretical = axes[0, 1]
 
     # 6. Plot Empirical Subplot
-    mesh0 = ax_empirical.pcolormesh(X, Y, hist_empirical.T, cmap="viridis", shading="flat")
+    mesh0 = ax_empirical.pcolormesh(
+        X, Y, hist_empirical.T, cmap="viridis", shading="flat"
+    )
     plt.colorbar(mesh0, ax=ax_empirical, label="Density")
     ax_empirical.set_title(title)
 
@@ -111,11 +117,18 @@ def plot_latent_density(
                 hist_theoretical[i, j] = prob / area if area > 0 else 0
 
         mesh1 = ax_theoretical.pcolormesh(
-            X, Y, hist_theoretical.T, cmap="viridis", shading="flat", vmax=np.max(hist_empirical)
+            X,
+            Y,
+            hist_theoretical.T,
+            cmap="viridis",
+            shading="flat",
+            vmax=np.max(hist_empirical),
         )
         plt.colorbar(mesh1, ax=ax_theoretical, label="Density")
         # Apply decimal points formatting here
-        ax_theoretical.set_title(rf"Theoretical Gaussian ($\rho={rho:.{decimal_points}f}$)")
+        ax_theoretical.set_title(
+            rf"Theoretical Gaussian ($\rho={rho:.{decimal_points}f}$)"
+        )
 
     # 8. Aesthetics
     active_axes = [ax_empirical]
