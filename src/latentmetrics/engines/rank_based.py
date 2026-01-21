@@ -130,7 +130,7 @@ def latent_rank_co(
     solution = root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
-        method="bisect",
+        method="brentq",
     )
 
     return float(solution.root)
@@ -187,7 +187,7 @@ def latent_rank_cb(
     solution = root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
-        method="bisect",
+        method="brentq",
     )
 
     return float(solution.root)
@@ -290,7 +290,7 @@ def latent_rank_oo(
     solution = root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
-        method="bisect",
+        method="brentq",
     )
 
     return float(solution.root)
@@ -346,7 +346,7 @@ def latent_rank_bb(
     solution = root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
-        method="bisect",
+        method="brentq",
     )
 
     return float(solution.root)
