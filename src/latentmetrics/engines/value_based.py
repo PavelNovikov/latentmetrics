@@ -279,8 +279,6 @@ def polyserial_correlation(
 
     tau = np.concatenate(([-np.inf], norm.ppf(cum_props), [np.inf]))
 
-    rng = np.random.default_rng(seed)
-
     def negative_log_likelihood(rho: float) -> float:
         """
         Conditional negative log-likelihood of Y given X.
