@@ -4,6 +4,8 @@ Diagnostic tools and visualizations for latent correlation models.
 
 import importlib.util
 from typing import Any, Callable
+from .par_bootstrap_gof import get_gof_test_fn as get_par_bootstrap_gof_fn
+from .asymptotic_gof import get_gof_test_fn as get_asymptotic_gof_fn
 
 
 def _has_matplotlib() -> bool:
@@ -46,4 +48,6 @@ else:
         "plot_tail_concentration_function",
         "plot_k_plot",
         "plot_latent_density",
+        "get_par_bootstrap_gof_fn",
+        "get_asymptotic_gof_fn",
     ]
