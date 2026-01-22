@@ -1,6 +1,6 @@
 [project]
 name = "latentmetrics"
-version = "0.1.1"
+version = "0.1.2"
 description = "Minimalistic latent correlation estimators for discretized data."
 authors = [{name = "Pavel Novikov", email = "pavnoval@gmail.com"}]
 license = {text = "MIT"}
