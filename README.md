@@ -43,14 +43,6 @@ To verify if the data aligns with the theoretical assumptions of the Gaussian co
 2.  **K-plot (Kendall plot)**: (For continuous data) A diagnostic tool to assess the dependency structure independently of marginal distributions.
 3.  **Latent Space Comparison**: For both continuous and discrete data, the package allows for a direct visual check of the Gaussian copula assumption. This is done by comparing 2D histograms or empirical categorical densities against the theoretical densities expected under the estimated latent correlation. The comparison is performed in the latent space by mapping observed data via rank transformation.
 
-## Diagnostics & Model Fit
-
-To verify whether the data aligns with the theoretical assumptions of the Gaussian copula, the package provides tools to visualize and compare observed data against theoretical expectations:
-
-1.  **Tail Concentration Function** (Continuous data): Detects whether dependence is concentrated in the extremes (tails), which would indicate a departure from Gaussian assumptions.
-2.  **K-plot (Kendall Plot)** (Continuous data): A diagnostic tool used to assess the underlying dependency structure independently of the marginal distributions.
-3.  **Latent Space Comparison** (Mixed data types): Facilitates a direct visual check of the Gaussian copula assumption by comparing observed 2D histograms or empirical categorical densities against theoretical densities. This is achieved by mapping observed data into the latent space via rank transformation to evaluate the estimated latent correlation.
-
 To numerically evaluate model fit, the package implements two classes of goodness-of-fit tests:
 
 * **Parametric Bootstrap Tests**: Robust but computationally intensive.
