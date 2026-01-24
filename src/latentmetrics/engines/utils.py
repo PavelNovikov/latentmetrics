@@ -1,6 +1,23 @@
 import numpy as np
 from scipy.stats import norm
 from numpy.typing import ArrayLike
+from scipy.optimize import root_scalar
+
+
+def safe_root_scalar(f, bracket, method="bisect", **kwargs):
+    a, b = bracket
+    fa = f(a)
+    fb = f(b)
+
+    if np.sign(fa) != np.sign(fb):
+        return root_scalar(f, bracket=[a, b], method=method, **kwargs).root
+
+    if fa == 0:
+        return a
+    if fb == 0:
+        return b
+
+    return a if abs(fa) < abs(fb) else b
 
 
 def get_threshold_zscore(x: ArrayLike) -> float:
