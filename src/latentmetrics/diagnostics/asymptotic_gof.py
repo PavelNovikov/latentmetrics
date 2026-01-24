@@ -129,7 +129,8 @@ def calculate_score(q1, q2, rho):
 
 
 def calculate_hessian(q1, q2, rho):
-    return (
+
+    num = (
         3 * q1**2 * rho**2
         + q1**2
         - 2 * q1 * q2 * rho**3
@@ -138,157 +139,173 @@ def calculate_hessian(q1, q2, rho):
         + q2**2
         + rho**4
         - 1
-    ) / ((rho - 1) ** 3 * (rho + 1) ** 3)
+    )
+    denom = (rho**2 - 1) ** 3
+    return num / denom
 
 
-def calculate_W(F_data, rho, grid_res=100):
-    n = len(F_data)
+def calculate_grad_hessian(q1, q2, rho):
 
-    ticks = np.linspace(0.001, 0.999, grid_res)
+    num = (
+        -12 * q1**2 * rho**3
+        - 12 * q1**2 * rho
+        + 6 * q1 * q2 * rho**4
+        + 36 * q1 * q2 * rho**2
+        + 6 * q1 * q2
+        - 12 * q2**2 * rho**3
+        - 12 * q2**2 * rho
+        - 2 * rho**5
+        - 4 * rho**3
+        + 6 * rho
+    )
+    denom = (rho**2 - 1) ** 4
+    return num / denom
+
+
+def calculate_grad_D(q1, q2, rho):
+
+    S = calculate_score(q1, q2, rho)
+    H = calculate_hessian(q1, q2, rho)
+    H_prime = calculate_grad_hessian(q1, q2, rho)
+
+    return H_prime + 2 * S * H
+
+
+def calculate_W(data, rho, margin=2, grid_res=400):
+
+    data = np.atleast_1d(data)
+    n = len(data)
+
+    h = 1.0 / grid_res
+    ticks = np.linspace(h / 2, 1 - h / 2, grid_res)
     u_grid, v_grid = np.meshgrid(ticks, ticks)
-
     q1 = norm.ppf(u_grid)
     q2 = norm.ppf(v_grid)
-    denom = (rho**2 - 1) ** 2
 
-    nabla_k1 = (
-        np.sqrt(2 * np.pi)
-        * np.exp(0.5 * q1**2)
-        * (rho**2 * q2 - 2 * rho * q1 + q2)
-        / denom
+    R2 = 1 - rho**2
+
+    density = (1 / np.sqrt(R2)) * np.exp(
+        -(rho**2 * (q1**2 + q2**2) - 2 * rho * q1 * q2) / (2 * R2)
     )
 
-    density = (1 / np.sqrt(1 - rho**2)) * np.exp(
-        -(rho**2 * (q1**2 + q2**2) - 2 * rho * q1 * q2) / (2 * (1 - rho**2))
-    )
+    hessian = calculate_hessian(q1, q2, rho)
 
-    kernel_weight = nabla_k1 * density * (1.0 / grid_res**2)
+    weight = hessian * density * (h**2)
+    weight -= np.mean(weight)
 
     W = np.zeros(n)
-
     for t in range(n):
-        indicator_part = (F_data[t] <= u_grid).astype(float) - u_grid
-        W[t] = np.sum(indicator_part * kernel_weight)
+        indic = (data[t] <= v_grid).astype(float) - v_grid
+        W[t] = np.sum(indic * weight)
 
     return W
 
 
-def calculate_grad_D(q1, q2, rho):
-    return -(
-        6 * q1**4 * rho**3
-        + 2 * q1**4 * rho
-        - 10 * q1**3 * q2 * rho**4
-        - 20 * q1**3 * q2 * rho**2
-        - 2 * q1**3 * q2
-        + 4 * q1**2 * q2**2 * rho**5
-        + 28 * q1**2 * q2**2 * rho**3
-        + 16 * q1**2 * q2**2 * rho
-        + 20 * q1**2 * rho**5
-        - 4 * q1**2 * rho**3
-        - 16 * q1**2 * rho
-        - 10 * q1 * q2**3 * rho**4
-        - 20 * q1 * q2**3 * rho**2
-        - 2 * q1 * q2**3
-        - 12 * q1 * q2 * rho**6
-        - 40 * q1 * q2 * rho**4
-        + 44 * q1 * q2 * rho**2
-        + 8 * q1 * q2
-        + 6 * q2**4 * rho**3
-        + 2 * q2**4 * rho
-        + 20 * q2**2 * rho**5
-        - 4 * q2**2 * rho**3
-        - 16 * q2**2 * rho
-        + 4 * rho**7
-        - 12 * rho**3
-        + 8 * rho
-    ) / ((1.0 * rho - 1.0) ** 5 * (1.0 * rho + 1.0) ** 5)
+def calculate_M(F_data, rho, margin=2, grid_limit=5, grid_res=400):
 
+    F_data = np.atleast_1d(F_data)
+    nodes = np.linspace(-grid_limit, grid_limit, grid_res)
+    dq = nodes[1] - nodes[0]
+    q1_g, q2_g = np.meshgrid(nodes, nodes)
 
-def calculate_M(F_data, rho, grid_res=100):
-    n = len(F_data)
+    R2 = 1 - rho**2
+    denom = (rho**2 - 1) ** 4
 
-    ticks = np.linspace(0.001, 0.999, grid_res)
-    u_grid, v_grid = np.meshgrid(ticks, ticks)
+    if margin == 2:
+        cond_density = (1 / np.sqrt(2 * np.pi * R2)) * np.exp(
+            -((q1_g - rho * q2_g) ** 2) / (2 * R2)
+        )
+        target_grid = norm.cdf(q2_g)
 
-    q1 = norm.ppf(u_grid)
-    q2 = norm.ppf(v_grid)
+        km = (
+            -2 * q1_g**3 * rho**3
+            - 2 * q1_g**3 * rho
+            + 2 * q1_g**2 * q2_g * rho**4
+            + 8 * q1_g**2 * q2_g * rho**2
+            + 2 * q1_g**2 * q2_g
+            - 6 * q1_g * q2_g**2 * rho**3
+            - 6 * q1_g * q2_g**2 * rho
+            - 4 * q1_g * rho**5
+            - 4 * q1_g * rho**3
+            + 8 * q1_g * rho
+            + 4 * q2_g**3 * rho**2
+            + 10 * q2_g * rho**4
+            - 8 * q2_g * rho**2
+            - 2 * q2_g
+        )
+    else:
+        cond_density = (1 / np.sqrt(2 * np.pi * R2)) * np.exp(
+            -((q2_g - rho * q1_g) ** 2) / (2 * R2)
+        )
+        target_grid = norm.cdf(q1_g)
 
-    density = (1 / np.sqrt(1 - rho**2)) * np.exp(
-        -(rho**2 * (q1**2 + q2**2) - 2 * rho * q1 * q2) / (2 * (1 - rho**2))
-    )
+        km = (
+            -2 * q2_g**3 * rho**3
+            - 2 * q2_g**3 * rho
+            + 2 * q2_g**2 * q1_g * rho**4
+            + 8 * q2_g**2 * q1_g * rho**2
+            + 2 * q2_g**2 * q1_g
+            - 6 * q2_g * q1_g**2 * rho**3
+            - 6 * q2_g * q1_g**2 * rho
+            - 4 * q2_g * rho**5
+            - 4 * q2_g * rho**3
+            + 8 * q2_g * rho
+            + 4 * q1_g**3 * rho**2
+            + 10 * q1_g * rho**4
+            - 8 * q1_g * rho**2
+            - 2 * q1_g
+        )
 
-    denom_m = (rho - 1) ** 4 * (rho + 1) ** 4
+    weight_q = (km / denom) * cond_density * (dq**2)
+    weight_q -= np.mean(weight_q)
 
-    km = (
-        4 * q1**3 * rho**2
-        - 6 * q1**2 * q2 * rho**3
-        - 6 * q1**2 * q2 * rho
-        + 2 * q1 * q2**2 * rho**4
-        + 8 * q1 * q2**2 * rho**2
-        + 2 * q1 * q2**2
-        + q1 * rho**4
-        - 8 * q1 * rho**2
-        - 2 * q1
-        - 2 * q2**3 * rho**3
-        - 2 * q2**3 * rho
-        - 4 * q2 * rho**5
-        - 4 * q2 * rho**3
-        + 8 * q2 * rho
-    )
-
-    m_weight = (
-        (np.sqrt(2 * np.pi) * km * np.exp(0.5 * q1**2) / denom_m)
-        * density
-        / (grid_res**2)
-    )
-
-    M = np.zeros(n)
-
-    for t in range(n):
-        indic = (F_data[t] <= u_grid).astype(float) - u_grid
-
-        M[t] = np.sum(indic * m_weight)
+    M = np.zeros(len(F_data))
+    for t in range(len(F_data)):
+        indic = (F_data[t] <= target_grid).astype(float) - target_grid
+        M[t] = np.sum(indic * weight_q)
 
     return M
 
 
-def calculate_correction_factor(u, v, rho):
-    q1 = norm.ppf(u)
-    q2 = norm.ppf(v)
+def calculate_psi(u, v, rho):
+    q1, q2 = norm.ppf(u), norm.ppf(v)
 
     score_t = calculate_score(q1, q2, rho)
     hessian_t = calculate_hessian(q1, q2, rho)
-    dt_vec = hessian_t + score_t**2
 
-    W1 = calculate_W(u, rho)
-    W2 = calculate_W(v, rho)
-    M1 = calculate_M(u, rho)
-    M2 = calculate_M(v, rho)
+    M1 = calculate_M(u, rho, margin=1)
+    M2 = calculate_M(v, rho, margin=2)
+    term_a = (hessian_t + score_t**2) + M1 + M2
 
-    B = np.mean(hessian_t)
+    B = -np.mean(hessian_t)
 
-    grad_D = np.mean(calculate_grad_D(q1, q2, rho))
+    grad_D_vec = calculate_grad_D(q1, q2, rho)
+    adj_factor = np.mean(grad_D_vec) / B
 
-    adj_factor = grad_D / B
-
-    term_a = dt_vec + M1 + M2
+    W1 = calculate_W(u, rho, margin=1)
+    W2 = calculate_W(v, rho, margin=2)
     term_b = adj_factor * (score_t + W1 + W2)
 
-    psi = term_a + term_b
+    return term_a + term_b
 
-    v_rho = np.mean(psi**2)
 
-    return v_rho
+def calculate_correction_factor(u, v, rho):
+    psi = calculate_psi(u, v, rho)
+    return np.mean(psi**2)
 
 
 def huang_prokhorov_test(x, y):
     """
+    Huang-Prokhorov goodness-of-fit test for Gaussian copula.
+
     Reference
     ---------
     Huang, W., & Prokhorov, A. (2014).
     A goodness-of-fit test for copulas.
     Econometric Reviews, 33(7), 751-771.
     """
+    x = np.asarray(x)
+    y = np.asarray(y)
     T = len(x)
     u = stats.rankdata(x) / (T + 1)
     v = stats.rankdata(y) / (T + 1)
@@ -301,4 +318,5 @@ def huang_prokhorov_test(x, y):
     Vp = calculate_correction_factor(u, v, rho)
     stat = T * (D_bar**2) / Vp
     p_val = 1 - chi2.cdf(stat, df=1)
+
     return p_val
