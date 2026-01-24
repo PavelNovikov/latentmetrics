@@ -7,10 +7,10 @@ from typing import Optional
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.optimize import root_scalar
+
 from scipy.stats import kendalltau, multivariate_normal, norm
 
-from .utils import get_category_zscores, get_threshold_zscore
+from .utils import get_category_zscores, get_threshold_zscore, safe_root_scalar
 
 
 # ---------------------------------------------------------------------
@@ -127,13 +127,13 @@ def latent_rank_co(
     def objective(rho: float) -> float:
         return bridge_function(rho) - tau_observed
 
-    solution = root_scalar(
+    solution = safe_root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
         method="brentq",
     )
 
-    return float(solution.root)
+    return solution
 
 
 # ---------------------------------------------------------------------
@@ -184,13 +184,13 @@ def latent_rank_cb(
     def objective(rho: float) -> float:
         return bridge_function(rho) - tau_observed
 
-    solution = root_scalar(
+    solution = safe_root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
         method="brentq",
     )
 
-    return float(solution.root)
+    return solution
 
 
 # ---------------------------------------------------------------------
@@ -287,13 +287,13 @@ def latent_rank_oo(
     def objective(rho: float) -> float:
         return bridge_function(rho) - tau_observed
 
-    solution = root_scalar(
+    solution = safe_root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
         method="brentq",
     )
 
-    return float(solution.root)
+    return solution
 
 
 # ---------------------------------------------------------------------
@@ -343,10 +343,10 @@ def latent_rank_bb(
     def objective(rho: float) -> float:
         return bridge_function(rho) - tau_observed
 
-    solution = root_scalar(
+    solution = safe_root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
         method="brentq",
     )
 
-    return float(solution.root)
+    return solution
