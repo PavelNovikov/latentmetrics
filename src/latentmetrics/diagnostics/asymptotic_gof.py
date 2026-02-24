@@ -121,15 +121,26 @@ def m2_test(x, y):
 
 
 def calculate_score(q1, q2, rho):
-    return (
-        -1
-        * (q1**2 * rho - q1 * q2 * rho**2 - q1 * q2 + q2**2 * rho + rho**3 - rho)
-        / ((rho - 1) ** 2 * (rho + 1) ** 2)
-    )
+    """
+    Derivative of the log-copula density with respect to rho.
+
+    The copula density is calculated as the ratio of the total
+    bivariate Gaussian density to the product of the marginal
+    densities.
+    """
+    denom = (1 - rho**2) ** 2
+    num = rho * (1 - rho**2) + q1 * q2 * (1 + rho**2) - rho * (q1**2 + q2**2)
+    return num / denom
 
 
 def calculate_hessian(q1, q2, rho):
+    """
+    Second derivative of the log-copula density with respect to rho.
 
+    The copula density is calculated as the ratio of the total
+    bivariate Gaussian density to the product of the marginal
+    densities.
+    """
     num = (
         3 * q1**2 * rho**2
         + q1**2
@@ -145,6 +156,10 @@ def calculate_hessian(q1, q2, rho):
 
 
 def calculate_grad_hessian(q1, q2, rho):
+    """
+    Third derivative of the log-copula density with respect to rho
+    (Gradient of the Hessian)
+    """
 
     num = (
         -12 * q1**2 * rho**3
@@ -163,6 +178,10 @@ def calculate_grad_hessian(q1, q2, rho):
 
 
 def calculate_grad_D(q1, q2, rho):
+    """
+    Gradient of the Information Matrix indicator (Hessian + Score^2)
+    with respect to rho.
+    """
 
     S = calculate_score(q1, q2, rho)
     H = calculate_hessian(q1, q2, rho)
@@ -171,8 +190,21 @@ def calculate_grad_D(q1, q2, rho):
     return H_prime + 2 * S * H
 
 
-def calculate_W(data, rho, margin=2, grid_res=400):
+def calculate_mixed_derivative(q1, q2, rho):
+    """
+    Mixed second derivative of the log-copula density with respect to rho
+    and u.
+    """
+    num = q2 * (1 + rho**2) - 2 * rho * q1
+    denom = (1 - rho**2) ** 2
+    jacobian = 1.0 / norm.pdf(q1)
+    return (num / denom) * jacobian
 
+
+def calculate_W(data, rho, grid_res=400):
+    """
+    W adjustment term for a single marginal distribution.
+    """
     data = np.atleast_1d(data)
     n = len(data)
 
@@ -183,86 +215,69 @@ def calculate_W(data, rho, margin=2, grid_res=400):
     q2 = norm.ppf(v_grid)
 
     R2 = 1 - rho**2
-
     density = (1 / np.sqrt(R2)) * np.exp(
         -(rho**2 * (q1**2 + q2**2) - 2 * rho * q1 * q2) / (2 * R2)
     )
 
-    hessian = calculate_hessian(q1, q2, rho)
-
-    weight = hessian * density * (h**2)
-    weight -= np.mean(weight)
+    mixed_u = calculate_mixed_derivative(q1, q2, rho)
+    weight = mixed_u * density * (h**2)
 
     W = np.zeros(n)
     for t in range(n):
-        indic = (data[t] <= v_grid).astype(float) - v_grid
+        indic = (data[t] <= u_grid).astype(float) - u_grid
         W[t] = np.sum(indic * weight)
 
     return W
 
 
-def calculate_M(F_data, rho, margin=2, grid_limit=5, grid_res=400):
+def calculate_grad_D_dq1(q1, q2, rho):
+    """
+    Derivative of the information matrix indicator (H + S^2) with respect to q1.
+    """
+    num = 2 * (
+        2 * q1**3 * rho**2
+        - 3 * q1**2 * q2 * rho**3
+        - 3 * q1**2 * q2 * rho
+        + q1 * q2**2 * rho**4
+        + 4 * q1 * q2**2 * rho**2
+        + q1 * q2**2
+        + 5 * q1 * rho**4
+        - 4 * q1 * rho**2
+        - q1
+        - q2**3 * rho**3
+        - q2**3 * rho
+        - 2 * q2 * rho**5
+        - 2 * q2 * rho**3
+        + 4 * q2 * rho
+    )
+    denom = (rho - 1) ** 4 * (rho + 1) ** 4
+    return num / denom
 
+
+def calculate_M(F_data, rho, grid_res=400):
+    """
+    M adjustment term for a single marginal distribution.
+    """
     F_data = np.atleast_1d(F_data)
-    nodes = np.linspace(-grid_limit, grid_limit, grid_res)
-    dq = nodes[1] - nodes[0]
-    q1_g, q2_g = np.meshgrid(nodes, nodes)
+    n = len(F_data)
+
+    h = 1.0 / grid_res
+    ticks = np.linspace(h / 2, 1 - h / 2, grid_res)
+    u_grid, v_grid = np.meshgrid(ticks, ticks)
+    q1 = norm.ppf(u_grid)
+    q2 = norm.ppf(v_grid)
 
     R2 = 1 - rho**2
-    denom = (rho**2 - 1) ** 4
+    copula_density = (1 / np.sqrt(R2)) * np.exp(
+        -(rho**2 * (q1**2 + q2**2) - 2 * rho * q1 * q2) / (2 * R2)
+    )
 
-    if margin == 2:
-        cond_density = (1 / np.sqrt(2 * np.pi * R2)) * np.exp(
-            -((q1_g - rho * q2_g) ** 2) / (2 * R2)
-        )
-        target_grid = norm.cdf(q2_g)
+    weight = calculate_grad_D_dq1(q1, q2, rho) / norm.pdf(q1) * copula_density * (h**2)
 
-        km = (
-            -2 * q1_g**3 * rho**3
-            - 2 * q1_g**3 * rho
-            + 2 * q1_g**2 * q2_g * rho**4
-            + 8 * q1_g**2 * q2_g * rho**2
-            + 2 * q1_g**2 * q2_g
-            - 6 * q1_g * q2_g**2 * rho**3
-            - 6 * q1_g * q2_g**2 * rho
-            - 4 * q1_g * rho**5
-            - 4 * q1_g * rho**3
-            + 8 * q1_g * rho
-            + 4 * q2_g**3 * rho**2
-            + 10 * q2_g * rho**4
-            - 8 * q2_g * rho**2
-            - 2 * q2_g
-        )
-    else:
-        cond_density = (1 / np.sqrt(2 * np.pi * R2)) * np.exp(
-            -((q2_g - rho * q1_g) ** 2) / (2 * R2)
-        )
-        target_grid = norm.cdf(q1_g)
-
-        km = (
-            -2 * q2_g**3 * rho**3
-            - 2 * q2_g**3 * rho
-            + 2 * q2_g**2 * q1_g * rho**4
-            + 8 * q2_g**2 * q1_g * rho**2
-            + 2 * q2_g**2 * q1_g
-            - 6 * q2_g * q1_g**2 * rho**3
-            - 6 * q2_g * q1_g**2 * rho
-            - 4 * q2_g * rho**5
-            - 4 * q2_g * rho**3
-            + 8 * q2_g * rho
-            + 4 * q1_g**3 * rho**2
-            + 10 * q1_g * rho**4
-            - 8 * q1_g * rho**2
-            - 2 * q1_g
-        )
-
-    weight_q = (km / denom) * cond_density * (dq**2)
-    weight_q -= np.mean(weight_q)
-
-    M = np.zeros(len(F_data))
-    for t in range(len(F_data)):
-        indic = (F_data[t] <= target_grid).astype(float) - target_grid
-        M[t] = np.sum(indic * weight_q)
+    M = np.zeros(n)
+    for t in range(n):
+        indic = (F_data[t] <= u_grid).astype(float) - u_grid
+        M[t] = np.sum(indic * weight)
 
     return M
 
@@ -273,8 +288,8 @@ def calculate_psi(u, v, rho):
     score_t = calculate_score(q1, q2, rho)
     hessian_t = calculate_hessian(q1, q2, rho)
 
-    M1 = calculate_M(u, rho, margin=1)
-    M2 = calculate_M(v, rho, margin=2)
+    M1 = calculate_M(u, rho)
+    M2 = calculate_M(v, rho)
     term_a = (hessian_t + score_t**2) + M1 + M2
 
     B = -np.mean(hessian_t)
@@ -282,8 +297,8 @@ def calculate_psi(u, v, rho):
     grad_D_vec = calculate_grad_D(q1, q2, rho)
     adj_factor = np.mean(grad_D_vec) / B
 
-    W1 = calculate_W(u, rho, margin=1)
-    W2 = calculate_W(v, rho, margin=2)
+    W1 = calculate_W(u, rho)
+    W2 = calculate_W(v, rho)
     term_b = adj_factor * (score_t + W1 + W2)
 
     return term_a + term_b
