@@ -2,15 +2,18 @@
 
 # Latent Correlation Estimation Package
 
-This package provides **minimalistic implementations of latent correlation estimators** between pairs of continuous variables when one or both variables are **discretized**. 
+This package provides **minimalistic implementations of latent correlation estimators** between pairs of continuous variables when one or both variables are **discretized**.
 
 The main goal is to offer **both value-based and rank-based correlation estimates in one place**, with a **simple and easy-to-understand implementation**.
 
 > Note: Binary data is a special case of ordinal data. For clarity, we implemented binary correlations separately as a simpler example.
 
+---
+
 ## Supported Estimators
 
 ### 1. Value-Based Correlations
+
 - **Tetrachoric**
 - **Polychoric**
 - **Biserial**
@@ -19,6 +22,7 @@ The main goal is to offer **both value-based and rank-based correlation estimate
 These estimators assume a **bivariate normal underlying distribution** and estimate the correlation parameter ($\rho$) by **maximizing the likelihood** of the observed discretized data.
 
 ### 2. Rank-Based Correlations
+
 - Suitable for **binary, ordinal, and mixed (ordinal-continuous) data**, and also supports **continuous data** through **Greiner's formula**.
 - Based on the assumption that data arises from an **arbitrary monotonic transformation** of underlying bivariate Gaussian variables (Gaussian copula model).
 - The correlation parameter ($\rho$) is estimated by **matching the observed Kendall's tau** to its expected value as a function of $\rho$. This makes these estimators invariant to marginal transformations.
@@ -29,9 +33,9 @@ These estimators assume a **bivariate normal underlying distribution** and estim
 
 The package includes utilities for generating synthetic data to test estimator robustness across different distributional assumptions:
 
-1.  **Normal Distribution**: Satisfies the underlying assumptions for both value-based and rank-based methods.
-2.  **Lognormal Distribution**: Violates the assumptions of value-based methods due to non-normality, but holds for rank-based methods.
-3.  **Gumbel and Clayton Copulas**: Violate the assumptions of both families of estimators due to the presence of tail dependence, which deviates from the Gaussian copula model.
+1. **Normal Distribution**: Satisfies the underlying assumptions for both value-based and rank-based methods.
+2. **Lognormal Distribution**: Violates the assumptions of value-based methods due to non-normality, but holds for rank-based methods.
+3. **Gumbel and Clayton Copulas**: Violate the assumptions of both families of estimators due to the presence of tail dependence, which deviates from the Gaussian copula model.
 
 ---
 
@@ -39,28 +43,26 @@ The package includes utilities for generating synthetic data to test estimator r
 
 To verify if the data aligns with the theoretical assumptions of the Gaussian copula model, the package provides tools to visualize and compare the observed data against theoretical expectations:
 
-1.  **Tail Concentration Function**: (For continuous data) Helps detect if dependence is concentrated in the tails, which would contradict a Gaussian assumption.
-2.  **K-plot (Kendall plot)**: (For continuous data) A diagnostic tool to assess the dependency structure independently of marginal distributions.
-3.  **Latent Space Comparison**: For both continuous and discrete data, the package allows for a direct visual check of the Gaussian copula assumption. This is done by comparing 2D histograms or empirical categorical densities against the theoretical densities expected under the estimated latent correlation. The comparison is performed in the latent space by mapping observed data via rank transformation.
+1. **Tail Concentration Function**: (For continuous data) Helps detect if dependence is concentrated in the tails, which would contradict a Gaussian assumption.
+2. **K-plot (Kendall plot)**: (For continuous data) A diagnostic tool to assess the dependency structure independently of marginal distributions.
+3. **Latent Space Comparison**: For both continuous and discrete data, the package allows for a direct visual check of the Gaussian copula assumption. This is done by comparing 2D histograms or empirical categorical densities against the theoretical densities expected under the estimated latent correlation. The comparison is performed in the latent space by mapping observed data via rank transformation.
 
 To numerically evaluate model fit, the package implements two classes of goodness-of-fit tests:
 
-* **Parametric Bootstrap Tests**: Robust but computationally intensive.
-* **Asymptotic Distribution Tests**: Significantly faster, though potentially less reliable for small sample sizes.
+- **Parametric Bootstrap Tests**: Robust but computationally intensive.
+- **Asymptotic Distribution Tests**: Significantly faster, though potentially less reliable for small sample sizes.
 
 Both categories include specialized tests for **continuous** and **ordinal** data, as well as a **mixed-data** test that discretizes continuous variables to leverage ordinal testing frameworks.
 
-
-
-
 ---
-
 
 ## Installation
 
 ```bash
 pip install latentmetrics[all]
 ```
+
+---
 
 ## Usage
 
@@ -158,8 +160,6 @@ p_value = bootstrap_test_fn(
 print(f"Parametric bootstrap GOF p-value (Gaussian copula): {p_value:.4f}")
 
 
-
-
 # Asymptotic goodness-of-fit test
 asymptotic_test_fn = get_asymptotic_gof_fn(
     VariableType.ORDINAL,
@@ -215,56 +215,135 @@ plot_k_plot(
 plt.subplots_adjust(hspace=0.4, wspace=0.3)
 plt.show()
 ```
+
 ![Visual diagnostics](./diagnostics.svg)
+
+---
+
+## Correction for Outcome-Dependent Sampling
+
+In case-control and other outcome-dependent sampling designs, cases (e.g. patients with a disease) are deliberately oversampled relative to their true population prevalence. This distorts the empirical class proportions of the outcome variable, which in turn biases Kendall's tau and the latent correlation estimate derived from it.
+
+Rank-based estimators support a `proportions` argument that reweights the tau computation and latent thresholds to reflect the true population distribution, recovering an unbiased estimate from the biased sample.
+
+**Option A: continuous biomarker** (e.g. a raw lab measurement)
+
+```python
+import numpy as np
+from latentmetrics import make_corr_fn, VariableType, EstimateMethod
+from latentmetrics.synthesis import Synthesis
+
+RHO_TRUE = 0.4
+N_POPULATION = 50000
+TRUE_CASE_PREVALENCE = 0.05
+
+x_latent, y_latent = Synthesis.normal(rho=RHO_TRUE, n=N_POPULATION)
+true_probs_y = [1 - TRUE_CASE_PREVALENCE, TRUE_CASE_PREVALENCE]
+
+x_pop = x_latent                                       # continuous — no discretization
+y_pop = Synthesis.discretize(y_latent, true_probs_y)   # 0 = control, 1 = case
+
+case_idx = np.where(y_pop == 1)[0]
+control_idx = np.where(y_pop == 0)[0]
+selected_controls = np.random.default_rng(0).choice(
+    control_idx, size=len(case_idx), replace=False
+)
+sample_idx = np.sort(np.concatenate([case_idx, selected_controls]))
+x_obs, y_obs = x_pop[sample_idx], y_pop[sample_idx]
+
+corr_fn = make_corr_fn(VariableType.CONTINUOUS, VariableType.BINARY, method=EstimateMethod.RANK)
+
+rho_biased    = corr_fn(x_obs, y_obs).estimate
+rho_corrected = corr_fn(x_obs, y_obs, proportions=true_probs_y).estimate
+
+print(f"True rho:      {RHO_TRUE:.4f}")
+print(f"Biased rho:    {rho_biased:.4f}")
+print(f"Corrected rho: {rho_corrected:.4f}")
+```
+
+**Option B: ordinal biomarker** (e.g. a discretized severity score)
+
+```python
+import numpy as np
+from latentmetrics import make_corr_fn, VariableType, EstimateMethod
+from latentmetrics.synthesis import Synthesis
+
+RHO_TRUE = 0.4
+N_POPULATION = 50000
+TRUE_CASE_PREVALENCE = 0.05
+
+x_latent, y_latent = Synthesis.normal(rho=RHO_TRUE, n=N_POPULATION)
+true_probs_y = [1 - TRUE_CASE_PREVALENCE, TRUE_CASE_PREVALENCE]
+true_probs_x = [0.25, 0.25, 0.25, 0.25]
+
+x_pop = Synthesis.discretize(x_latent, true_probs_x)   # ordinal severity score
+y_pop = Synthesis.discretize(y_latent, true_probs_y)   # 0 = control, 1 = case
+
+case_idx = np.where(y_pop == 1)[0]
+control_idx = np.where(y_pop == 0)[0]
+selected_controls = np.random.default_rng(0).choice(
+    control_idx, size=len(case_idx), replace=False
+)
+sample_idx = np.sort(np.concatenate([case_idx, selected_controls]))
+x_obs, y_obs = x_pop[sample_idx], y_pop[sample_idx]
+
+corr_fn = make_corr_fn(VariableType.ORDINAL, VariableType.BINARY, method=EstimateMethod.RANK)
+
+rho_biased    = corr_fn(x_obs, y_obs).estimate
+rho_corrected = corr_fn(x_obs, y_obs, proportions=true_probs_y).estimate
+
+print(f"True rho:      {RHO_TRUE:.4f}")
+print(f"Biased rho:    {rho_biased:.4f}")
+print(f"Corrected rho: {rho_corrected:.4f}")
+```
+
+The `proportions` argument accepts the **true population class proportions** for the discrete `y` variable. These are typically available from external sources such as registry data, census statistics, or published prevalence estimates. The estimator uses them to reweight Kendall's tau and adjust the latent thresholds. When `x` is also discrete, its true population proportions are recovered automatically from the conditional distribution `P(x | y)`, which is preserved under outcome-dependent subsampling.
+
+---
 
 ## Related Code Packages
 
 If you are looking for alternative implementations or specialized features, you may find these packages useful:
 
 ### R Packages
-- [polycor](https://cran.r-project.org/web/packages/polycor/index.html) – The established standard for Polychoric and Polyserial correlations in R. 
+
+- [polycor](https://cran.r-project.org/web/packages/polycor/index.html) – The established standard for Polychoric and Polyserial correlations in R.
 - [latentcor](https://cran.r-project.org/web/packages/latentcor/vignettes/latentcor.html) – Efficient implementations of rank-based correlations.
-- [gofCopula](https://cran.r-project.org/web/packages/gofCopula/index.html) – A comprehensive suite of goodness-of-fit tests for validating copula models. 
+- [gofCopula](https://cran.r-project.org/web/packages/gofCopula/index.html) – A comprehensive suite of goodness-of-fit tests for validating copula models.
 - [copula](https://cran.r-project.org/web/packages/copula/index.html) – A foundational toolkit for constructing, simulating, and estimating a wide variety of multivariate dependence models.
 
-
 ### Python Packages
+
 - [latentcor](https://pypi.org/project/latentcor/) – High-performance Python implementation of rank-based correlation by the authors of the R package with the same name.
 - [semopy](https://pypi.org/project/semopy/) – Structural Equation Modeling (SEM) package; includes polychoric and polyserial correlations.
 - [copulas](https://pypi.org/project/copulas/), [copul](https://pypi.org/project/copul/) – Packages for the analysis and generation of synthetic data using copula models.
 
+---
+
 ## Literature & References
 
 ### Value-Based Correlations
-- **Polychoric correlation** Olsson, U. (1979). *Maximum likelihood estimation of the polychoric correlation coefficient*. Psychometrika, 44(4), 443–460.  
 
-- **Polyserial correlation** Olsson, U., Drasgow, F., & Dorans, N. J. (1982). *The polyserial correlation coefficient*. Psychometrika, 47(3), 337–347.  
+- **Polychoric correlation** Olsson, U. (1979). *Maximum likelihood estimation of the polychoric correlation coefficient*. Psychometrika, 44(4), 443–460.
+- **Polyserial correlation** Olsson, U., Drasgow, F., & Dorans, N. J. (1982). *The polyserial correlation coefficient*. Psychometrika, 47(3), 337–347.
 
 ### Rank-Based & Semiparametric Modeling
-- Dey, D., & Zipunnikov, V. (2022). *Semiparametric Gaussian Copula Regression Modeling for Mixed Data Types (SGCRM)*. arXiv preprint arXiv:2205.06868.  
+
+- Dey, D., & Zipunnikov, V. (2022). *Semiparametric Gaussian Copula Regression Modeling for Mixed Data Types (SGCRM)*. arXiv preprint arXiv:2205.06868.
 
 ### Copula Theory & Background
+
 - Durante, F., Fernández-Sánchez, J., & Pappadà, R. (2015). *Copulas, diagonals, and tail dependence*. Fuzzy Sets and Systems, 264, 22–41.
-
 - Genest, C., & Favre, A. C. (2007). *Everything you always wanted to know about copula modeling but were afraid to ask*. Journal of Hydrologic Engineering, 12(4), 347–368.
-
 - Hofert, M., Kojadinovic, I., Mächler, M., & Yan, J. (2018). *Elements of copula modeling with R*. Springer.
 
 ### Simulation & Data Synthesis
+
 - Hofert, M. (2008). *Sampling Archimedean copulas*. Computational Statistics & Data Analysis, 52(12), 5163–5174.
 
 ### Goodness-of-Fit Tests for Copulas
+
 - Genest, C., Rémillard, B., & Beaudoin, D. (2009). Goodness-of-fit tests for copulas: A review and a power study. Insurance: Mathematics and economics, 44(2), 199-213.
-
-- Foldnes, N., & Grønneberg, S. (2020). Pernicious polychorics: The impact and detection of underlying non-normality.  Structural Equation Modeling: A Multidisciplinary Journal, 27(4), 525-543.
-
+- Foldnes, N., & Grønneberg, S. (2020). Pernicious polychorics: The impact and detection of underlying non-normality. Structural Equation Modeling: A Multidisciplinary Journal, 27(4), 525-543.
 - Maydeu-Olivares, A., García-Forero, C., Gallardo-Pujol, D., & Renom, J. (2009). Testing categorized bivariate normality with two-stage polychoric correlation estimates. Methodology, 5(4), 131-136.
-
 - Huang, W., & Prokhorov, A. (2014). A goodness-of-fit test for copulas. Econometric Reviews, 33(7), 751-771.
-
-
-
-
-
-
-

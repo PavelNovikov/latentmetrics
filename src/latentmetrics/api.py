@@ -10,19 +10,15 @@ def make_corr_fn(
     y_type: VariableType,
     method: EstimateMethod = EstimateMethod.VALUE,
 ) -> Callable[[ArrayLike, ArrayLike], CorrResult]:
-
     impl = CORR_REGISTRY.get((method, x_type, y_type))
-
     if not impl:
         raise NotImplementedError(
             f"No implementation for {method} with {x_type} and {y_type}"
         )
 
-    def metric(x: ArrayLike, y: ArrayLike) -> CorrResult:
+    def metric(x: ArrayLike, y: ArrayLike, **kwargs) -> CorrResult:
         x_arr, y_arr = np.asarray(x), np.asarray(y)
-
-        val = impl(x_arr, y_arr)
-
+        val = impl(x_arr, y_arr, **kwargs)
         return CorrResult(
             estimate=float(val),
             method=method,

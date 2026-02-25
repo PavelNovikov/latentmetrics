@@ -1,45 +1,21 @@
-"""
-Latent correlation estimation using rank-based statistics under
-Gaussian copula models.
-"""
-
 from typing import Optional
 
 import numpy as np
 from numpy.typing import ArrayLike
 
-from scipy.stats import kendalltau, multivariate_normal, norm
+from scipy.stats import multivariate_normal, norm
 
-from .utils import get_category_zscores, get_threshold_zscore, safe_root_scalar
-
-
-# ---------------------------------------------------------------------
-# Utility functions
-# ---------------------------------------------------------------------
-
-
-def get_tau_a(x: ArrayLike, y: ArrayLike) -> float:
-    """
-    Compute the original Kendall's tau (tau-a) by reconstructing it
-    from the tie-corrected Kendall's tau-c.
-    """
-
-    tau_c = kendalltau(x, y, variant="c").correlation
-
-    num_unique_x = len(np.unique(x))
-    num_unique_y = len(np.unique(y))
-    min_unique = min(num_unique_x, num_unique_y)
-
-    n = len(x)
-
-    tau_a = tau_c * (min_unique - 1) / min_unique * n / (n - 1)
-
-    return float(tau_a)
+from .utils import (
+    get_category_zscores,
+    get_threshold_zscore,
+    recover_proportions,
+    safe_root_scalar,
+    compute_tau_a,
+    compute_tau_a_continuous,
+)
 
 
-# ---------------------------------------------------------------------
-# Continuous–continuous
-# ---------------------------------------------------------------------
+# --- Continuous–continuous -------------------------------------------
 
 
 def latent_rank_cc(
@@ -55,25 +31,22 @@ def latent_rank_cc(
     Reference
     ----------
     Newson, R. (2002).
-    Parameters behind “nonparametric” statistics: Kendall's tau,
-    Somers’ D and median differences.
+    Parameters behind "nonparametric" statistics: Kendall's tau,
+    Somers' D and median differences.
     *The Stata Journal*, 2(1), 45–64.
     """
 
     x = np.asarray(x)
     y = np.asarray(y)
 
-    tau_observed = get_tau_a(x, y)
+    tau_observed = compute_tau_a_continuous(x, y)
 
-    # Greiner's relationship between Kendall's tau and latent correlation
     latent_rho = np.sin((np.pi / 2) * tau_observed)
 
     return float(latent_rho)
 
 
-# ---------------------------------------------------------------------
-# Continuous–ordinal
-# ---------------------------------------------------------------------
+# --- Continuous–ordinal -----------------------------------------------
 
 
 def latent_rank_co(
@@ -81,10 +54,11 @@ def latent_rank_co(
     ordinal_y: ArrayLike,
     eps: float = 1e-8,
     seed: Optional[int] = 42,
+    proportions: Optional[ArrayLike] = None,
 ) -> float:
     """
     Estimate the correlation parameter of a Gaussian copula underlying one
-    continuous and one observed ordinal variable, based on Kendall’s tau.
+    continuous and one observed ordinal variable, based on Kendall's tau.
 
     Reference
     ----------
@@ -96,18 +70,13 @@ def latent_rank_co(
     x = np.asarray(continuous_x)
     y = np.asarray(ordinal_y)
 
-    tau_observed = get_tau_a(x, y)
-    zscores_y = get_category_zscores(y)
+    weights = np.asarray(proportions) * len(y) if proportions is not None else None
+    tau_observed = compute_tau_a(x, y, weights=weights)
+    zscores_y = get_category_zscores(y, proportions=proportions)
 
     rng = np.random.default_rng(seed)
 
     def bridge_function(rho: float) -> float:
-        """
-        Map latent correlation rho to the expected Kendall's tau
-        for a continuous–ordinal variable pair.
-        """
-
-        # Each row corresponds to (lower, upper) bounds of an ordinal category
         deltas = np.column_stack(
             (zscores_y[:-1], zscores_y[1:], np.zeros(len(zscores_y) - 1))
         )
@@ -127,18 +96,14 @@ def latent_rank_co(
     def objective(rho: float) -> float:
         return bridge_function(rho) - tau_observed
 
-    solution = safe_root_scalar(
+    return safe_root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
         method="brentq",
     )
 
-    return solution
 
-
-# ---------------------------------------------------------------------
-# Continuous–binary
-# ---------------------------------------------------------------------
+# --- Continuous–binary -----------------------------------------------
 
 
 def latent_rank_cb(
@@ -146,10 +111,11 @@ def latent_rank_cb(
     binary_y: ArrayLike,
     eps: float = 1e-8,
     seed: Optional[int] = 42,
+    proportions: Optional[ArrayLike] = None,
 ) -> float:
     """
     Estimate the correlation parameter of a Gaussian copula underlying one
-    continuous and one observed binary variable, based on Kendall’s tau.
+    continuous and one observed binary variable, based on Kendall's tau.
 
     Reference
     ----------
@@ -161,17 +127,13 @@ def latent_rank_cb(
     x = np.asarray(continuous_x)
     y = np.asarray(binary_y)
 
-    tau_observed = get_tau_a(x, y)
-    zscore_y = get_threshold_zscore(y)
+    weights = np.asarray(proportions) * len(y) if proportions is not None else None
+    tau_observed = compute_tau_a(x, y, weights=weights)
+    zscore_y = get_threshold_zscore(y, proportions=proportions)
 
     rng = np.random.default_rng(seed)
 
     def bridge_function(rho: float) -> float:
-        """
-        Expected Kendall's tau under a latent Gaussian copula
-        for continuous–binary data.
-        """
-
         mean = np.zeros(2)
         cov = np.eye(2)
         cov[0, 1] = cov[1, 0] = rho / np.sqrt(2)
@@ -184,18 +146,14 @@ def latent_rank_cb(
     def objective(rho: float) -> float:
         return bridge_function(rho) - tau_observed
 
-    solution = safe_root_scalar(
+    return safe_root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
         method="brentq",
     )
 
-    return solution
 
-
-# ---------------------------------------------------------------------
-# Ordinal–ordinal
-# ---------------------------------------------------------------------
+# --- Ordinal–ordinal -------------------------------------------------
 
 
 def latent_rank_oo(
@@ -203,10 +161,15 @@ def latent_rank_oo(
     ordinal_y: ArrayLike,
     eps: float = 1e-8,
     seed: Optional[int] = 42,
+    proportions: Optional[ArrayLike] = None,
 ) -> float:
     """
     Estimate the correlation parameter of a Gaussian copula underlying two
-    observed ordinal variables, based on Kendall’s tau.
+    observed ordinal variables, based on Kendall's tau.
+
+    When proportions are provided, the true population proportions of x are
+    recovered automatically via recover_proportions(), since subsampling on y
+    also distorts the marginal distribution of x.
 
     Reference
     ----------
@@ -218,26 +181,25 @@ def latent_rank_oo(
     x = np.asarray(ordinal_x)
     y = np.asarray(ordinal_y)
 
-    # Observed Kendall's tau from data
-    tau_observed = get_tau_a(x, y)
+    weights = np.asarray(proportions) * len(y) if proportions is not None else None
+    tau_observed = compute_tau_a(x, y, weights=weights)
 
-    # Latent Gaussian cut-points for ordinal categories
-    # Include -inf to simplify indexing of adjacent intervals
-    zscores_x = np.concatenate(([-np.inf], get_category_zscores(x)))
-    zscores_y = np.concatenate(([-np.inf], get_category_zscores(y)))
+    proportions_x = (
+        recover_proportions(x, y, proportions) if proportions is not None else None
+    )
+    zscores_x = np.concatenate(
+        ([-np.inf], get_category_zscores(x, proportions=proportions_x))
+    )
+    zscores_y = np.concatenate(
+        ([-np.inf], get_category_zscores(y, proportions=proportions))
+    )
 
     rng = np.random.default_rng(seed)
 
     def bridge_function(rho: float) -> float:
-        """
-        Compute the expected Kendall's tau as a function of the
-        latent correlation rho.
-        """
-
         mean = np.zeros(2)
         cov = [[1.0, rho], [rho, 1.0]]
 
-        # Interior cut-points (exclude -inf and +inf)
         Ax, Ay = np.meshgrid(
             zscores_x[1:-1],
             zscores_y[1:-1],
@@ -248,7 +210,6 @@ def latent_rank_oo(
             Ax.shape
         )
 
-        # Upper-right corners of rectangles
         Ax_n, Ay_n = np.meshgrid(
             zscores_x[2:],
             zscores_y[2:],
@@ -259,7 +220,6 @@ def latent_rank_oo(
             points_n, mean=mean, cov=cov, rng=rng
         ).reshape(Ax_n.shape)
 
-        # Lower-right corners of rectangles
         Ax_s, Ay_p = np.meshgrid(
             zscores_x[2:],
             zscores_y[:-2],
@@ -270,10 +230,8 @@ def latent_rank_oo(
             points_p, mean=mean, cov=cov, rng=rng
         ).reshape(Ax_s.shape)
 
-        # Core summation term from the bridge function
         s = np.sum(cdf_ab * (cdf_next - cdf_prev))
 
-        # Marginal term
         norm_cdfs_x = norm.cdf(zscores_x[1:-1])
         corr_points = np.column_stack(
             [zscores_x[2:], np.full(len(zscores_x) - 2, zscores_y[-2])]
@@ -287,18 +245,19 @@ def latent_rank_oo(
     def objective(rho: float) -> float:
         return bridge_function(rho) - tau_observed
 
-    solution = safe_root_scalar(
+    print("zscores_x", zscores_x)
+
+    print("zscores_y", zscores_y)
+
+    print("tau observed:", tau_observed)
+    return safe_root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
         method="brentq",
     )
 
-    return solution
 
-
-# ---------------------------------------------------------------------
-# Binary–binary
-# ---------------------------------------------------------------------
+# --- Binary–binary ---------------------------------------------------
 
 
 def latent_rank_bb(
@@ -306,10 +265,15 @@ def latent_rank_bb(
     binary_y: ArrayLike,
     eps: float = 1e-8,
     seed: Optional[int] = 42,
+    proportions: Optional[ArrayLike] = None,
 ) -> float:
     """
     Estimate the correlation parameter of a Gaussian copula underlying two
-    observed binary variables, based on Kendall’s tau.
+    observed binary variables, based on Kendall's tau.
+
+    When proportions are provided, the true population proportion of x is
+    recovered automatically via recover_proportions(), since subsampling on y
+    also distorts the marginal distribution of x.
 
     Reference
     ----------
@@ -321,15 +285,18 @@ def latent_rank_bb(
     x = np.asarray(binary_x)
     y = np.asarray(binary_y)
 
-    tau_observed = get_tau_a(x, y)
-    zscore_x = get_threshold_zscore(x)
-    zscore_y = get_threshold_zscore(y)
+    weights = np.asarray(proportions) * len(y) if proportions is not None else None
+    tau_observed = compute_tau_a(x, y, weights=weights)
+
+    proportions_x = (
+        recover_proportions(x, y, proportions) if proportions is not None else None
+    )
+    zscore_x = get_threshold_zscore(x, proportions=proportions_x)
+    zscore_y = get_threshold_zscore(y, proportions=proportions)
 
     rng = np.random.default_rng(seed)
 
     def bridge_function(rho: float) -> float:
-        """Expected Kendall's tau under a latent Gaussian copula."""
-
         mean = np.zeros(2)
         cov = [[1.0, rho], [rho, 1.0]]
 
@@ -343,10 +310,8 @@ def latent_rank_bb(
     def objective(rho: float) -> float:
         return bridge_function(rho) - tau_observed
 
-    solution = safe_root_scalar(
+    return safe_root_scalar(
         objective,
         bracket=[-1.0 + eps, 1.0 - eps],
         method="brentq",
     )
-
-    return solution
