@@ -41,11 +41,11 @@ class DistributionPoint:
 # Shared parametrize list used across TestCoreFormulas, TestWComponent, and
 # TestMComponent to exercise a representative spread of (u, v, rho) combinations.
 STANDARD_TEST_POINTS = [
-    DistributionPoint(u=0.5, v=0.7, rho=0.5,  name="Standard"),
-    DistributionPoint(u=0.5, v=0.5, rho=0.5,  name="Symmetric"),
-    DistributionPoint(u=0.3, v=0.8, rho=0.3,  name="Low rho"),
-    DistributionPoint(u=0.6, v=0.4, rho=0.8,  name="High rho"),
-    DistributionPoint(u=0.5, v=0.7, rho=0.0,  name="Zero rho"),
+    DistributionPoint(u=0.5, v=0.7, rho=0.5, name="Standard"),
+    DistributionPoint(u=0.5, v=0.5, rho=0.5, name="Symmetric"),
+    DistributionPoint(u=0.3, v=0.8, rho=0.3, name="Low rho"),
+    DistributionPoint(u=0.6, v=0.4, rho=0.8, name="High rho"),
+    DistributionPoint(u=0.5, v=0.7, rho=0.0, name="Zero rho"),
     DistributionPoint(u=0.5, v=0.7, rho=-0.5, name="Negative rho"),
 ]
 
@@ -62,21 +62,21 @@ class GaussianCopulaSymbolic:
     All are sympy expressions ready to be substituted with .subs().
     """
 
-    r:     sp.Symbol
-    q1_s:  sp.Symbol
-    q2_s:  sp.Symbol
-    u:     sp.Symbol
-    v:     sp.Symbol
+    r: sp.Symbol
+    q1_s: sp.Symbol
+    q2_s: sp.Symbol
+    u: sp.Symbol
+    v: sp.Symbol
     log_c: sp.Expr
 
     @classmethod
     def build(cls) -> "GaussianCopulaSymbolic":
-        r    = sp.Symbol("r",  real=True)
+        r = sp.Symbol("r", real=True)
         q1_s = sp.Symbol("q1", real=True)
         q2_s = sp.Symbol("q2", real=True)
-        u    = sp.Symbol("u",  positive=True)
-        v    = sp.Symbol("v",  positive=True)
-        R2    = 1 - r**2
+        u = sp.Symbol("u", positive=True)
+        v = sp.Symbol("v", positive=True)
+        R2 = 1 - r**2
         log_c = -sp.Rational(1, 2) * sp.log(R2) - (
             r**2 * (q1_s**2 + q2_s**2) - 2 * r * q1_s * q2_s
         ) / (2 * R2)
@@ -92,7 +92,7 @@ class GaussianCopulaSymbolic:
 
     def information_indicator(self) -> sp.Expr:
         """H + S^2, the information matrix indicator D_t(theta)"""
-        return self.hessian() + self.score()**2
+        return self.hessian() + self.score() ** 2
 
     def mixed_derivative_wrt_u(self) -> sp.Expr:
         """d^2 log c / (dr du), with q1 = Phi^{-1}(u) and q2 = Phi^{-1}(v).
@@ -194,7 +194,9 @@ class TestCoreFormulas:
             hess = calculate_hessian(q1, q2, r)
             return hess + s**2
 
-        numerical_grad = (get_dt(rho + finite_diff_step) - get_dt(rho - finite_diff_step)) / (2 * finite_diff_step)
+        numerical_grad = (
+            get_dt(rho + finite_diff_step) - get_dt(rho - finite_diff_step)
+        ) / (2 * finite_diff_step)
         calculated_grad = calculate_grad_D(q1, q2, rho)
 
         print(
@@ -227,7 +229,9 @@ class TestCoreFormulas:
 
         # Numerical derivative of S^2
         score_squared_func = lambda r: calculate_score(q1, q2, r) ** 2
-        d_score_sq_numerical = numerical_derivative(score_squared_func, rho, finite_diff_step)
+        d_score_sq_numerical = numerical_derivative(
+            score_squared_func, rho, finite_diff_step
+        )
 
         # Chain rule: 2 * S * H
         S = calculate_score(q1, q2, rho)
@@ -296,11 +300,15 @@ class TestWComponent:
         rtol = 1e-5
 
         mixed_sym = SYMBOLIC_COPULA.mixed_derivative_wrt_u()
-        expected = float(mixed_sym.subs([
-            (SYMBOLIC_COPULA.r, rho),
-            (SYMBOLIC_COPULA.u, test_point.u),
-            (SYMBOLIC_COPULA.v, test_point.v),
-        ]))
+        expected = float(
+            mixed_sym.subs(
+                [
+                    (SYMBOLIC_COPULA.r, rho),
+                    (SYMBOLIC_COPULA.u, test_point.u),
+                    (SYMBOLIC_COPULA.v, test_point.v),
+                ]
+            )
+        )
         actual = calculate_mixed_derivative(q1, q2, rho)
 
         print(f"\n[{test_point.name}] Expected: {expected:.6f}, Actual: {actual:.6f}")
@@ -353,7 +361,9 @@ class TestMComponent:
         q1, q2, rho = test_point.q1, test_point.q2, test_point.rho
         rtol = 1e-5
 
-        d_dt_dq1_sym = sp.diff(SYMBOLIC_COPULA.information_indicator(), SYMBOLIC_COPULA.q1_s)
+        d_dt_dq1_sym = sp.diff(
+            SYMBOLIC_COPULA.information_indicator(), SYMBOLIC_COPULA.q1_s
+        )
         expected = SYMBOLIC_COPULA.subs(d_dt_dq1_sym, rho, q1, q2)
         actual = calculate_grad_D_dq1(q1, q2, rho)
 
@@ -378,7 +388,9 @@ class TestMComponent:
         std_val = np.std(m_values)
 
         print(f"\n[Rho {rho}] M Mean: {mean_val:.2e}, Std: {std_val:.4f}")
-        assert np.abs(mean_val) < mean_zero_atol, f"Mean of M too far from zero: {mean_val}"
+        assert (
+            np.abs(mean_val) < mean_zero_atol
+        ), f"Mean of M too far from zero: {mean_val}"
 
     def test_m_symmetry_property(self):
         """For Gaussian copula, M(v) should equal M(1-v) (symmetry)."""
@@ -536,7 +548,9 @@ class TestEndToEnd:
         p_value = huang_prokhorov_test(x, y)
 
         print(f"\nGaussian Copula Test: p-value = {p_value:.4f}")
-        assert p_value > min_p_value, f"Gaussian copula incorrectly rejected: p={p_value}"
+        assert (
+            p_value > min_p_value
+        ), f"Gaussian copula incorrectly rejected: p={p_value}"
 
     def test_size_under_null(self):
         """
@@ -569,7 +583,6 @@ class TestEndToEnd:
             rejections <= max_rejections
         ), f"Too many rejections under true null: {rejections}/{n_sims}, max allowed: {int(max_rejections)}"
 
-
     def test_numerical_stability_at_tails(self):
         """Test should handle extreme quantile values gracefully."""
         np.random.seed(42)
@@ -586,4 +599,3 @@ class TestEndToEnd:
             assert 0 <= p_value <= 1, f"Invalid p-value: {p_value}"
         except Exception as e:
             pytest.fail(f"Test crashed with extreme values: {e}")
-

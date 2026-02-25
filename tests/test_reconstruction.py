@@ -2,9 +2,7 @@ import numpy as np
 import pytest
 from latentmetrics import make_corr_fn, VariableType, EstimateMethod
 
-# =====================================================
-# Utilities
-# =====================
+# --- Utilities --------------------------------------------------
 
 
 def discretize(data, bins, balanced=False):
@@ -69,9 +67,61 @@ def run_correlation_test(
         assert abs(r1 - rho_true) > atol_fail
 
 
-# =====================================================
-# Test Suites
-# =====================================================
+def subsample_imbalanced(x, y, rng, minority_fraction=0.1):
+    """
+    Subsample class 0 of y down to minority_fraction of its original size.
+    Returns subsampled (x, y) and the true population proportions (pre-subsampling).
+    """
+    classes, counts = np.unique(y, return_counts=True)
+    true_proportions = counts / counts.sum()
+
+    keep_indices = []
+    for cls, count in zip(classes, counts):
+        cls_idx = np.where(y == cls)[0]
+        if cls == classes[0]:
+            n_keep = max(1, int(count * minority_fraction))
+            keep_indices.append(rng.choice(cls_idx, size=n_keep, replace=False))
+        else:
+            keep_indices.append(cls_idx)
+
+    keep = np.concatenate(keep_indices)
+    keep = np.sort(keep)
+    return x[keep], y[keep], true_proportions
+
+
+def run_subsampled_proportions_test(
+    request,
+    dist_name,
+    x_type,
+    y_type,
+    rho_true,
+    atol_pass=0.02,
+    atol_fail=0.02,
+    minority_fraction=0.05,
+    seed=42,
+    n=50_000,
+):
+    rng = np.random.default_rng(seed)
+    generator = request.getfixturevalue(dist_name)
+    x_latent, y_latent = generator(rho_true, n=n)
+
+    x, y = make_observed(x_latent, y_latent, x_type, y_type, balanced=True)
+    x_sub, y_sub, true_proportions = subsample_imbalanced(x, y, rng, minority_fraction)
+
+    calc_fn = make_corr_fn(x_type, y_type, EstimateMethod.RANK)
+
+    r_without = calc_fn(x_sub, y_sub).estimate
+    assert (
+        abs(r_without - rho_true) > atol_fail
+    ), f"Expected reconstruction to fail without proportions, got {r_without:.4f}"
+
+    r_with = calc_fn(x_sub, y_sub, proportions=true_proportions).estimate
+    assert r_with == pytest.approx(
+        rho_true, abs=atol_pass
+    ), f"Expected reconstruction to pass with proportions, got {r_with:.4f}"
+
+
+# --- Test Suites --------------------------------------------------
 
 
 @pytest.mark.parametrize("method", [EstimateMethod.VALUE, EstimateMethod.RANK])
@@ -127,4 +177,32 @@ def test_lognormal_rank_pass_value_fail(request, types, method, should_pass):
         0.5,
         expected_pass=should_pass,
         balanced=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "types",
+    [
+        (VariableType.CONTINUOUS, VariableType.BINARY),
+        (VariableType.CONTINUOUS, VariableType.ORDINAL),
+        (VariableType.ORDINAL, VariableType.BINARY),
+        (VariableType.BINARY, VariableType.BINARY),
+        (VariableType.ORDINAL, VariableType.ORDINAL),
+    ],
+    ids=[
+        "CONTINUOUS-BINARY",
+        "CONTINUOUS-ORDINAL",
+        "ORDINAL-BINARY",
+        "BINARY-BINARY",
+        "ORDINAL-ORDINAL",
+    ],
+)
+def test_rank_proportions_correct_imbalance(request, types):
+    x_type, y_type = types
+    run_subsampled_proportions_test(
+        request,
+        "gaussian_dist",
+        x_type,
+        y_type,
+        rho_true=0.5,
     )
